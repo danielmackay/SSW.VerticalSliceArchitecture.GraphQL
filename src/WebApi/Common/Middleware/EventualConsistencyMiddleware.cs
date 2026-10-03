@@ -36,8 +36,11 @@ public class EventualConsistencyMiddleware
             if (context.Items.TryGetValue(DomainEventsKey, out var value) &&
                 value is Queue<IDomainEvent> domainEvents)
             {
+                // Not RequestAborted: this runs after the response is sent, and a client that
+                // disconnects once it has its answer would cancel the handlers half way, leaving
+                // the saved change without its follow-up (the team total never recalculated).
                 while (domainEvents.TryDequeue(out var nextEvent))
-                    await dispatcher.DispatchAsync(nextEvent, context.RequestAborted);
+                    await dispatcher.DispatchAsync(nextEvent, CancellationToken.None);
             }
         }
         // ReSharper disable once RedundantCatchClause

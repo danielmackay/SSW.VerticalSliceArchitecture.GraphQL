@@ -64,9 +64,18 @@ public sealed class DomainEventDispatcher(IServiceScopeFactory scopeFactory) : I
 
         public Task InvokeAsync(object handler, IDomainEvent domainEvent, CancellationToken cancellationToken)
         {
+            // DoNotWrapExceptions: a handler that throws before its first await (a non-async method,
+            // or an argument guard) would otherwise surface as TargetInvocationException, hiding
+            // types callers catch, such as EventualConsistencyException.
+            //
             // The method is non-void and returns Task, so a null result means the handler type no
             // longer matches the interface this invoker was built from — a bug, not a no-op.
-            return _handleAsync.Invoke(handler, [domainEvent, cancellationToken]) as Task
+            return _handleAsync.Invoke(
+                       handler,
+                       BindingFlags.DoNotWrapExceptions,
+                       binder: null,
+                       [domainEvent, cancellationToken],
+                       culture: null) as Task
                    ?? throw new InvalidOperationException(
                        $"{handler.GetType()}.{nameof(IDomainEventHandler<IDomainEvent>.HandleAsync)} did not return a {nameof(Task)}.");
         }

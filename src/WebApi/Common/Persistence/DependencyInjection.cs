@@ -15,9 +15,7 @@ public static class DependencyInjection
         services.AddScoped<DispatchDomainEventsInterceptor>();
         services.AddSingleton(TimeProvider.System);
 
-        var connectionString = builder.Configuration.GetConnectionString(ConnectionName)
-                               ?? throw new InvalidOperationException(
-                                   $"Connection string '{ConnectionName}' was not found. Aspire supplies it to the api resource.");
+        var configuration = builder.Configuration;
 
         // A factory, not a plain AddDbContext, because GraphQL resolves sibling fields in
         // parallel and a DbContext allows one operation at a time. HotChocolate hands each
@@ -29,7 +27,11 @@ public static class DependencyInjection
         services.AddDbContextFactory<ApplicationDbContext>(
             (serviceProvider, options) =>
             {
-                options.UseSqlServer(connectionString);
+                // Read when the options are built, not at startup. Aspire only supplies the
+                // connection string to the api and migrations resources, and `schema export` and
+                // `dotnet ef migrations add` boot this host without it. A missing string still
+                // fails loudly: SqlClient throws on the first connection.
+                options.UseSqlServer(configuration.GetConnectionString(ConnectionName));
 
                 options.AddInterceptors(
                     serviceProvider.GetRequiredService<EntitySaveChangesInterceptor>(),
